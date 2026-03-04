@@ -1,39 +1,25 @@
 import SwiftUI
 import AppKit
 
+enum PortType { case backend, frontend }
+
 struct MenuContent: View {
     var monitor: StatusMonitor
     var manager: ProcessManager
     var onAbout: () -> Void
 
     var body: some View {
-        // ── Backend ports ─────────────────────────────────────────────────
+        // ── Backend ports ──────────────────────────────────────────────────
         ForEach(monitor.backendPorts) { port in
-            Label {
-                Text(portLabel(port))
-            } icon: {
-                Image(nsImage: dotImage(port.isRunning ? .systemGreen : .systemRed))
-            }
+            portMenu(port, type: .backend)
         }
-
-        Button("Start Backend")    { manager.startBackend() }  .disabled(monitor.backendRunning)
-        Button("Stop Backend")     { manager.stopBackend() }   .disabled(!monitor.backendRunning)
-        Button("Open Backend Log") { NSWorkspace.shared.open(URL(fileURLWithPath: "/tmp/backend.log")) }
 
         Divider()
 
-        // ── Frontend ports ────────────────────────────────────────────────
+        // ── Frontend ports ─────────────────────────────────────────────────
         ForEach(monitor.frontendPorts) { port in
-            Label {
-                Text(portLabel(port))
-            } icon: {
-                Image(nsImage: dotImage(port.isRunning ? .systemGreen : .systemRed))
-            }
+            portMenu(port, type: .frontend)
         }
-
-        Button("Start Frontend")    { manager.startFrontend() }  .disabled(monitor.frontendRunning)
-        Button("Stop Frontend")     { manager.stopFrontend() }   .disabled(!monitor.frontendRunning)
-        Button("Open Frontend Log") { NSWorkspace.shared.open(URL(fileURLWithPath: "/tmp/frontend.log")) }
 
         Divider()
 
@@ -53,9 +39,76 @@ struct MenuContent: View {
         Button("Quit") { NSApplication.shared.terminate(nil) }
     }
 
+    // MARK: - Per-port submenu
+
+    @ViewBuilder
+    private func portMenu(_ port: PortInfo, type: PortType) -> some View {
+        Menu {
+            if port.isRunning {
+                Button("Stop") {
+                    manager.stop(port: port.id)
+                }
+                Button("Open Log") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/tmp/sampras-\(port.id).log"))
+                }
+            } else {
+                Button("Start…") {
+                    let capturedPort = port.id
+                    let capturedManager = manager
+                    DispatchQueue.main.async {
+                        MenuContent.showStartPanel(port: capturedPort, type: type, manager: capturedManager)
+                    }
+                }
+            }
+        } label: {
+            Label {
+                Text(portLabel(port))
+            } icon: {
+                Image(nsImage: dotImage(port.isRunning ? .systemGreen : .systemRed))
+            }
+        }
+    }
+
+    // MARK: - Start panel
+
+    static func showStartPanel(port: Int, type: PortType, manager: ProcessManager) {
+        let apps = discoverApps().filter { type == .backend ? $0.hasBackend : $0.hasFrontend }
+
+        NSApplication.shared.activate(ignoringOtherApps: true)
+
+        guard !apps.isEmpty else {
+            let alert = NSAlert()
+            alert.messageText = "No apps found"
+            alert.informativeText = "No compatible apps were discovered in your home folder."
+            alert.runModal()
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Start on :\(port)"
+        alert.informativeText = "Choose which app to run on this port:"
+        alert.addButton(withTitle: "Start")
+        alert.addButton(withTitle: "Cancel")
+
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 220, height: 26))
+        for app in apps { popup.addItem(withTitle: app.name) }
+        alert.accessoryView = popup
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let selected = apps[popup.indexOfSelectedItem]
+
+        if type == .backend {
+            manager.startBackend(port: port, app: selected)
+        } else {
+            manager.startFrontend(port: port, app: selected)
+        }
+    }
+
+    // MARK: - Helpers
+
     private func portLabel(_ port: PortInfo) -> String {
         var label = ":\(port.id)"
-        if let name = port.processName { label += "  \(name)" }
+        if let name = port.appName { label += "  \(name)" }
         return label
     }
 

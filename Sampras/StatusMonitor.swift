@@ -1,15 +1,15 @@
 import SwiftUI
 
 struct PortInfo: Identifiable {
-    let id: Int          // port number is the unique identifier
-    var processName: String? = nil
-    var isRunning: Bool { processName != nil }
+    let id: Int           // port number
+    var appName: String? = nil
+    var isRunning: Bool { appName != nil }
 }
 
 @Observable
 @MainActor
 class StatusMonitor {
-    var backendPorts:  [PortInfo] = [8000, 8001, 8002].map         { PortInfo(id: $0) }
+    var backendPorts:  [PortInfo] = [8000, 8001, 8002].map              { PortInfo(id: $0) }
     var frontendPorts: [PortInfo] = [5173, 5174, 5175, 5176, 5177, 5178].map { PortInfo(id: $0) }
 
     private var timer: Timer?
@@ -18,8 +18,6 @@ class StatusMonitor {
 
     var backendRunning:  Bool { backendPorts.contains  { $0.isRunning } }
     var frontendRunning: Bool { frontendPorts.contains { $0.isRunning } }
-
-    /// First running frontend port, used by "Open in Browser".
     var activeFrontendPort: Int? { frontendPorts.first(where: { $0.isRunning })?.id }
 
     private func startPolling() {
@@ -31,30 +29,59 @@ class StatusMonitor {
 
     private func poll() async {
         for i in backendPorts.indices {
-            backendPorts[i].processName = await processName(forPort: backendPorts[i].id)
+            backendPorts[i].appName = await appName(forPort: backendPorts[i].id)
         }
         for i in frontendPorts.indices {
-            frontendPorts[i].processName = await processName(forPort: frontendPorts[i].id)
+            frontendPorts[i].appName = await appName(forPort: frontendPorts[i].id)
         }
     }
 
-    /// Runs lsof on a background thread and returns the process name listening on
-    /// the given port, or nil if nothing is listening.
-    private func processName(forPort port: Int) async -> String? {
-        await Task.detached {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-            p.arguments = ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN"]
-            let pipe = Pipe()
-            p.standardOutput = pipe
-            p.standardError  = Pipe()
-            guard (try? p.run()) != nil else { return nil }
-            p.waitUntilExit()
-            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            // lsof columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
-            let lines = output.components(separatedBy: "\n").filter { !$0.isEmpty }
+    /// Detects which project is running on a port by:
+    ///   1. lsof  → PID of the listening process
+    ///   2. ps    → full command string for that PID
+    ///   3. parse → first path component after the home directory
+    private func appName(forPort port: Int) async -> String? {
+        let home = NSHomeDirectory()
+        return await Task.detached {
+            // Step 1: lsof to find the PID
+            let lsof = Process()
+            lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+            lsof.arguments = ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN"]
+            let lsofPipe = Pipe()
+            lsof.standardOutput = lsofPipe
+            lsof.standardError  = Pipe()
+            guard (try? lsof.run()) != nil else { return nil }
+            lsof.waitUntilExit()
+
+            let lsofOut = String(data: lsofPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let lines = lsofOut.components(separatedBy: "\n").filter { !$0.isEmpty }
             guard lines.count > 1 else { return nil }
-            return lines[1].components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first
+            let fields = lines[1].components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            guard fields.count >= 2, let pid = Int(fields[1]) else { return nil }
+
+            // Step 2: ps to get the full command
+            let ps = Process()
+            ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+            ps.arguments = ["-p", "\(pid)", "-o", "command="]
+            let psPipe = Pipe()
+            ps.standardOutput = psPipe
+            ps.standardError  = Pipe()
+            guard (try? ps.run()) != nil else { return nil }
+            ps.waitUntilExit()
+
+            let command = String(data: psPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+            // Step 3: find the first home-directory path component in the command
+            let prefix = home + "/"
+            for token in command.components(separatedBy: .whitespaces) {
+                if token.hasPrefix(prefix) {
+                    let relative = String(token.dropFirst(prefix.count))
+                    if let name = relative.components(separatedBy: "/").first, !name.isEmpty {
+                        return name
+                    }
+                }
+            }
+            return nil
         }.value
     }
 

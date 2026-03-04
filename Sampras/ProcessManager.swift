@@ -1,76 +1,59 @@
 import Foundation
 
 class ProcessManager: ObservableObject {
-    private let projectRoot = "/Users/erikjosephson/everything-app"
+    /// Processes Sampras has started, keyed by port number.
+    private var processes: [Int: Process] = [:]
 
-    private var backendProcess: Process?
-    private var frontendProcess: Process?
+    // MARK: - Stop
 
-    // MARK: - Backend
+    func stop(port: Int) {
+        processes[port]?.terminate()
+        processes.removeValue(forKey: port)
 
-    func startBackend() {
-        guard backendProcess == nil || !backendProcess!.isRunning else { return }
+        // Also kill anything externally holding the port (e.g. started outside Sampras).
+        let killer = Process()
+        killer.executableURL = URL(fileURLWithPath: "/bin/bash")
+        killer.arguments = ["-c", "lsof -ti :\(port) | xargs kill -9 2>/dev/null; true"]
+        try? killer.run()
+        killer.waitUntilExit()
+    }
 
-        // Clear any process still holding port 8000 (e.g. crashed uvicorn)
-        let freePort = Process()
-        freePort.executableURL = URL(fileURLWithPath: "/bin/bash")
-        freePort.arguments = ["-c", "lsof -ti :8000 | xargs kill -9 2>/dev/null; true"]
-        try? freePort.run()
-        freePort.waitUntilExit()
+    // MARK: - Start Backend
 
-        let backendDir = "\(projectRoot)/backend"
-        let uvicorn = "\(projectRoot)/venv/bin/uvicorn"
-        let cmd = "cd '\(backendDir)' && '\(uvicorn)' app.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/backend.log 2>&1"
+    func startBackend(port: Int, app: AppDefinition) {
+        stop(port: port)
+        let cmd = """
+            cd '\(app.path)/backend' && \
+            '\(app.path)/venv/bin/uvicorn' app.main:app \
+            --host 0.0.0.0 --port \(port) --reload \
+            > '/tmp/sampras-\(port).log' 2>&1
+            """
+        launch(cmd: cmd, port: port)
+    }
 
+    // MARK: - Start Frontend
+
+    func startFrontend(port: Int, app: AppDefinition) {
+        stop(port: port)
+        let cmd = """
+            cd '\(app.path)/frontend' && \
+            npm run dev -- --port \(port) \
+            > '/tmp/sampras-\(port).log' 2>&1
+            """
+        launch(cmd: cmd, port: port)
+    }
+
+    // MARK: - Helpers
+
+    private func launch(cmd: String, port: Int) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = ["-c", cmd]
-
         do {
             try process.run()
-            backendProcess = process
+            processes[port] = process
         } catch {
-            print("Failed to start backend: \(error)")
+            print("Sampras: failed to launch on port \(port): \(error)")
         }
-    }
-
-    func stopBackend() {
-        backendProcess?.terminate()
-        backendProcess = nil
-
-        let killer = Process()
-        killer.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        killer.arguments = ["-f", "uvicorn app.main:app"]
-        try? killer.run()
-    }
-
-    // MARK: - Frontend
-
-    func startFrontend() {
-        guard frontendProcess == nil || !frontendProcess!.isRunning else { return }
-
-        let frontendDir = "\(projectRoot)/frontend"
-        let cmd = "cd '\(frontendDir)' && npm run dev > /tmp/frontend.log 2>&1"
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", cmd]
-
-        do {
-            try process.run()
-            frontendProcess = process
-        } catch {
-            print("Failed to start frontend: \(error)")
-        }
-    }
-
-    func stopFrontend() {
-        frontendProcess?.terminate()
-        frontendProcess = nil
-
-        let killer = Process()
-        killer.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        killer.arguments = ["-f", "vite"]
-        try? killer.run()
     }
 }

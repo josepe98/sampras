@@ -12,11 +12,13 @@
 		4AC7D69371F2201ECEEEB29F /* StatusMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B464BDA1D2D97BDCEE069390 /* StatusMonitor.swift */; };
 		5996520AC5419EB185869A2E /* ProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 317DD731159A6CB3100120BD /* ProcessManager.swift */; };
 		BCA5A72863293BFD28F06370 /* SamprasApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F012D317B50D5E8F434E8540 /* SamprasApp.swift */; };
+		D059896F9C047EABEC50AFDA /* AppDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BE3EA6044550599843CE1E /* AppDiscovery.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		317DD731159A6CB3100120BD /* ProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessManager.swift; sourceTree = "<group>"; };
 		744D1282D3BAB2D74C3B7BF9 /* MenuContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuContent.swift; sourceTree = "<group>"; };
+		B2BE3EA6044550599843CE1E /* AppDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiscovery.swift; sourceTree = "<group>"; };
 		B464BDA1D2D97BDCEE069390 /* StatusMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMonitor.swift; sourceTree = "<group>"; };
 		C7247E8516ECACDD820B37A1 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		DF8F6DCBD6F09EC83ECAE562 /* Sampras.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sampras.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -45,6 +47,7 @@
 			isa = PBXGroup;
 			children = (
 				C7247E8516ECACDD820B37A1 /* AboutView.swift */,
+				B2BE3EA6044550599843CE1E /* AppDiscovery.swift */,
 				FCA209C0E0A702572D33845D /* Info.plist */,
 				744D1282D3BAB2D74C3B7BF9 /* MenuContent.swift */,
 				317DD731159A6CB3100120BD /* ProcessManager.swift */,
@@ -113,6 +116,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1DE7E7EA7E16F10A3FE62587 /* AboutView.swift in Sources */,
+				D059896F9C047EABEC50AFDA /* AppDiscovery.swift in Sources */,
 				094A39C1BA6A063DE46AFD01 /* MenuContent.swift in Sources */,
 				5996520AC5419EB185869A2E /* ProcessManager.swift in Sources */,
 				BCA5A72863293BFD28F06370 /* SamprasApp.swift in Sources */,
