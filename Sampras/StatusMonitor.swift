@@ -1,5 +1,12 @@
 import SwiftUI
 
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
+    }
+}
+
 struct PortInfo: Identifiable {
     let id: Int           // port number
     var appName: String? = nil
@@ -54,30 +61,35 @@ class StatusMonitor {
             lsof.waitUntilExit()
 
             let lsofOut = String(data: lsofPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let lines = lsofOut.components(separatedBy: "\n").filter { !$0.isEmpty }
-            guard lines.count > 1 else { return nil }
-            let fields = lines[1].components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-            guard fields.count >= 2, let pid = Int(fields[1]) else { return nil }
+            // Skip the header line; collect all unique PIDs (uvicorn spawns a reloader subprocess,
+            // so lsof may return multiple rows — only one will have the project path).
+            let dataLines = lsofOut.components(separatedBy: "\n").dropFirst().filter { !$0.isEmpty }
+            guard !dataLines.isEmpty else { return nil }
 
-            // Step 2: ps to get the full command
-            let ps = Process()
-            ps.executableURL = URL(fileURLWithPath: "/bin/ps")
-            ps.arguments = ["-p", "\(pid)", "-o", "command="]
-            let psPipe = Pipe()
-            ps.standardOutput = psPipe
-            ps.standardError  = Pipe()
-            guard (try? ps.run()) != nil else { return nil }
-            ps.waitUntilExit()
+            let pids = dataLines.compactMap { line -> Int? in
+                let fields = line.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                return fields.count >= 2 ? Int(fields[1]) : nil
+            }.uniqued()
 
-            let command = String(data: psPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-
-            // Step 3: find the first home-directory path component in the command
+            // Step 2 & 3: for each PID, get the full command and try to parse the app name.
             let prefix = home + "/"
-            for token in command.components(separatedBy: .whitespaces) {
-                if token.hasPrefix(prefix) {
-                    let relative = String(token.dropFirst(prefix.count))
-                    if let name = relative.components(separatedBy: "/").first, !name.isEmpty {
-                        return name
+            for pid in pids {
+                let ps = Process()
+                ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+                ps.arguments = ["-p", "\(pid)", "-o", "command="]
+                let psPipe = Pipe()
+                ps.standardOutput = psPipe
+                ps.standardError  = Pipe()
+                guard (try? ps.run()) != nil else { continue }
+                ps.waitUntilExit()
+
+                let command = String(data: psPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                for token in command.components(separatedBy: .whitespaces) {
+                    if token.hasPrefix(prefix) {
+                        let relative = String(token.dropFirst(prefix.count))
+                        if let name = relative.components(separatedBy: "/").first, !name.isEmpty {
+                            return name
+                        }
                     }
                 }
             }
