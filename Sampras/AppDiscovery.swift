@@ -1,10 +1,11 @@
 import Foundation
 
 struct AppDefinition: Identifiable {
-    let name: String       // directory name, e.g. "everything-app"
-    let path: String       // absolute path, e.g. "/Users/x/everything-app"
-    let hasBackend: Bool   // has venv/bin/uvicorn
-    let hasFrontend: Bool  // has frontend/package.json
+    let name: String          // directory name, e.g. "everything-app"
+    let path: String          // absolute path, e.g. "/Users/x/everything-app"
+    let uvicornPath: String?  // absolute path to uvicorn binary, nil if no backend
+    let hasFrontend: Bool     // has frontend/package.json
+    var hasBackend: Bool { uvicornPath != nil }
     var id: String { name }
 }
 
@@ -30,11 +31,13 @@ func discoverApps() -> [AppDefinition] {
         else { return nil }
 
         let p = url.path
-        let hasBackend  = fm.fileExists(atPath: "\(p)/venv/bin/uvicorn")
+        // venv may live at the project root or inside backend/
+        let uvicorn: String? = ["\(p)/venv/bin/uvicorn", "\(p)/backend/venv/bin/uvicorn"]
+            .first(where: { fm.fileExists(atPath: $0) })
         let hasFrontend = fm.fileExists(atPath: "\(p)/frontend/package.json")
-        guard hasBackend || hasFrontend else { return nil }
+        guard uvicorn != nil || hasFrontend else { return nil }
 
         return AppDefinition(name: url.lastPathComponent, path: p,
-                             hasBackend: hasBackend, hasFrontend: hasFrontend)
+                             uvicornPath: uvicorn, hasFrontend: hasFrontend)
     }.sorted { $0.name < $1.name }
 }

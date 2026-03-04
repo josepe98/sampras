@@ -21,10 +21,11 @@ class ProcessManager: ObservableObject {
     // MARK: - Start Backend
 
     func startBackend(port: Int, app: AppDefinition) {
+        guard let uvicorn = app.uvicornPath else { return }
         stop(port: port)
         let cmd = """
             cd '\(app.path)/backend' && \
-            '\(app.path)/venv/bin/uvicorn' app.main:app \
+            '\(uvicorn)' app.main:app \
             --host 0.0.0.0 --port \(port) --reload \
             > '/tmp/sampras-\(port).log' 2>&1
             """
