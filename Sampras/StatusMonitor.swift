@@ -1,86 +1,68 @@
 import SwiftUI
 
+struct PortInfo: Identifiable {
+    let id: Int          // port number is the unique identifier
+    var processName: String? = nil
+    var isRunning: Bool { processName != nil }
+}
+
 @Observable
 @MainActor
 class StatusMonitor {
-    var backendRunning: Bool = false
-    var frontendRunning: Bool = false
-    var frontendPort: Int? = nil
+    var backendPorts:  [PortInfo] = [8000, 8001, 8002].map         { PortInfo(id: $0) }
+    var frontendPorts: [PortInfo] = [5173, 5174, 5175, 5176, 5177, 5178].map { PortInfo(id: $0) }
 
-    private let frontendPorts = Array(5173...5178)
     private var timer: Timer?
 
-    init() {
-        startPolling()
-    }
+    init() { startPolling() }
+
+    var backendRunning:  Bool { backendPorts.contains  { $0.isRunning } }
+    var frontendRunning: Bool { frontendPorts.contains { $0.isRunning } }
+
+    /// First running frontend port, used by "Open in Browser".
+    var activeFrontendPort: Int? { frontendPorts.first(where: { $0.isRunning })?.id }
 
     private func startPolling() {
         Task { await poll() }
-
         timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            Task { @MainActor [weak self] in
-                await self?.poll()
-            }
+            Task { @MainActor [weak self] in await self?.poll() }
         }
     }
 
     private func poll() async {
-        await checkBackend()
-        await checkFrontend()
-    }
-
-    private func checkBackend() async {
-        guard let url = URL(string: "http://localhost:8000/health") else {
-            backendRunning = false
-            return
+        for i in backendPorts.indices {
+            backendPorts[i].processName = await processName(forPort: backendPorts[i].id)
         }
-
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 2.0
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                backendRunning = true
-            } else {
-                backendRunning = false
-            }
-        } catch {
-            backendRunning = false
+        for i in frontendPorts.indices {
+            frontendPorts[i].processName = await processName(forPort: frontendPorts[i].id)
         }
     }
 
-    private func checkFrontend() async {
-        for port in frontendPorts {
-            guard let url = URL(string: "http://localhost:\(port)") else { continue }
-
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 1.0
-
-            do {
-                let (_, response) = try await URLSession.shared.data(for: request)
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode < 500 {
-                    frontendRunning = true
-                    frontendPort = port
-                    return
-                }
-            } catch {
-                // Try next port
-            }
-        }
-
-        frontendRunning = false
-        frontendPort = nil
+    /// Runs lsof on a background thread and returns the process name listening on
+    /// the given port, or nil if nothing is listening.
+    private func processName(forPort port: Int) async -> String? {
+        await Task.detached {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+            p.arguments = ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN"]
+            let pipe = Pipe()
+            p.standardOutput = pipe
+            p.standardError  = Pipe()
+            guard (try? p.run()) != nil else { return nil }
+            p.waitUntilExit()
+            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            // lsof columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+            let lines = output.components(separatedBy: "\n").filter { !$0.isEmpty }
+            guard lines.count > 1 else { return nil }
+            return lines[1].components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first
+        }.value
     }
 
     var overallColor: Color {
         switch (backendRunning, frontendRunning) {
-        case (true, true):
-            return .green
-        case (false, false):
-            return .red
-        default:
-            return .orange
+        case (true, true):   return .green
+        case (false, false): return .red
+        default:             return .orange
         }
     }
 }
