@@ -23,10 +23,18 @@ struct MenuContent: View {
 
         Divider()
 
-        Button("Open in Browser") {
-            let port = monitor.activeFrontendPort ?? 5173
-            if let url = URL(string: "http://localhost:\(port)") {
-                NSWorkspace.shared.open(url)
+        Menu("Open in Browser") {
+            let activeFrontends = monitor.frontendPorts.filter(\.isRunning)
+            if activeFrontends.isEmpty {
+                Text("No active apps")
+            } else {
+                ForEach(activeFrontends) { port in
+                    Button(port.appName ?? "localhost:\(port.id)") {
+                        if let url = URL(string: "http://localhost:\(port.id)") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
             }
         }
 

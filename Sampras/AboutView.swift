@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct AboutView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: 12) {
-            if let path = Bundle.main.path(forResource: "sampras_logo", ofType: "jpg"),
-               let nsImage = NSImage(contentsOfFile: path) {
+            if let nsImage = logoImage(for: colorScheme) {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -16,7 +17,7 @@ struct AboutView: View {
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("Version 1.3")
+            Text("Version 1.4")
                 .foregroundStyle(.secondary)
                 .font(.subheadline)
 
@@ -35,5 +36,17 @@ struct AboutView: View {
             Spacer()
         }
         .frame(width: 300, height: 240)
+    }
+
+    private func logoImage(for scheme: ColorScheme) -> NSImage? {
+        if scheme == .dark {
+            if let path = Bundle.main.path(forResource: "sampras_logo_dark", ofType: "png") {
+                return NSImage(contentsOfFile: path)
+            }
+        }
+        if let path = Bundle.main.path(forResource: "sampras_logo", ofType: "jpg") {
+            return NSImage(contentsOfFile: path)
+        }
+        return nil
     }
 }
