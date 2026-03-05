@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		094A39C1BA6A063DE46AFD01 /* MenuContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744D1282D3BAB2D74C3B7BF9 /* MenuContent.swift */; };
 		1DE7E7EA7E16F10A3FE62587 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7247E8516ECACDD820B37A1 /* AboutView.swift */; };
+		3D2D8E63EBEBE3E54655E105 /* sampras_logo.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 6DAC2C3372BC37A88E2C16D4 /* sampras_logo.jpg */; };
 		4AC7D69371F2201ECEEEB29F /* StatusMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B464BDA1D2D97BDCEE069390 /* StatusMonitor.swift */; };
 		5996520AC5419EB185869A2E /* ProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 317DD731159A6CB3100120BD /* ProcessManager.swift */; };
 		BCA5A72863293BFD28F06370 /* SamprasApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F012D317B50D5E8F434E8540 /* SamprasApp.swift */; };
@@ -17,6 +18,7 @@
 
 /* Begin PBXFileReference section */
 		317DD731159A6CB3100120BD /* ProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessManager.swift; sourceTree = "<group>"; };
+		6DAC2C3372BC37A88E2C16D4 /* sampras_logo.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = sampras_logo.jpg; sourceTree = "<group>"; };
 		744D1282D3BAB2D74C3B7BF9 /* MenuContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuContent.swift; sourceTree = "<group>"; };
 		B2BE3EA6044550599843CE1E /* AppDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiscovery.swift; sourceTree = "<group>"; };
 		B464BDA1D2D97BDCEE069390 /* StatusMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMonitor.swift; sourceTree = "<group>"; };
@@ -51,6 +53,7 @@
 				FCA209C0E0A702572D33845D /* Info.plist */,
 				744D1282D3BAB2D74C3B7BF9 /* MenuContent.swift */,
 				317DD731159A6CB3100120BD /* ProcessManager.swift */,
+				6DAC2C3372BC37A88E2C16D4 /* sampras_logo.jpg */,
 				F012D317B50D5E8F434E8540 /* SamprasApp.swift */,
 				B464BDA1D2D97BDCEE069390 /* StatusMonitor.swift */,
 			);
@@ -65,6 +68,7 @@
 			buildConfigurationList = 1451780C8E8F7E701DC3EF79 /* Build configuration list for PBXNativeTarget "Sampras" */;
 			buildPhases = (
 				C91DADEF8E56649656477218 /* Sources */,
+				FD073F308005A561F1995B36 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -109,6 +113,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FD073F308005A561F1995B36 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3D2D8E63EBEBE3E54655E105 /* sampras_logo.jpg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		C91DADEF8E56649656477218 /* Sources */ = {

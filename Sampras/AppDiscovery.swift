@@ -4,6 +4,7 @@ struct AppDefinition: Identifiable {
     let name: String          // directory name, e.g. "everything-app"
     let path: String          // absolute path, e.g. "/Users/x/everything-app"
     let uvicornPath: String?  // absolute path to uvicorn binary, nil if no backend
+    let uvicornModule: String // e.g. "app.main:app" or "main:app"
     let hasFrontend: Bool     // has frontend/package.json
     var hasBackend: Bool { uvicornPath != nil }
     var id: String { name }
@@ -37,7 +38,12 @@ func discoverApps() -> [AppDefinition] {
         let hasFrontend = fm.fileExists(atPath: "\(p)/frontend/package.json")
         guard uvicorn != nil || hasFrontend else { return nil }
 
+        // Detect module path: prefer app/main.py, fall back to main.py
+        let backendRoot = fm.fileExists(atPath: "\(p)/backend/app/main.py") || fm.fileExists(atPath: "\(p)/app/main.py")
+        let uvicornModule = backendRoot ? "app.main:app" : "main:app"
+
         return AppDefinition(name: url.lastPathComponent, path: p,
-                             uvicornPath: uvicorn, hasFrontend: hasFrontend)
+                             uvicornPath: uvicorn, uvicornModule: uvicornModule,
+                             hasFrontend: hasFrontend)
     }.sorted { $0.name < $1.name }
 }

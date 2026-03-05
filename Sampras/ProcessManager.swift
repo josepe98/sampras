@@ -25,7 +25,7 @@ class ProcessManager: ObservableObject {
         stop(port: port)
         let cmd = """
             cd '\(app.path)/backend' && \
-            '\(uvicorn)' app.main:app \
+            '\(uvicorn)' \(app.uvicornModule) \
             --host 0.0.0.0 --port \(port) --reload \
             > '/tmp/sampras-\(port).log' 2>&1
             """
