@@ -10,13 +10,14 @@ private extension Array where Element: Hashable {
 struct PortInfo: Identifiable {
     let id: Int           // port number
     var appName: String? = nil
+    var isDemoMode: Bool = false
     var isRunning: Bool { appName != nil }
 }
 
 @Observable
 @MainActor
 class StatusMonitor {
-    var backendPorts:  [PortInfo] = [8000, 8001, 8002].map              { PortInfo(id: $0) }
+    var backendPorts:  [PortInfo] = [8000, 8001, 8002, 8003, 8004, 8005].map { PortInfo(id: $0) }
     var frontendPorts: [PortInfo] = [5173, 5174, 5175, 5176, 5177, 5178].map { PortInfo(id: $0) }
 
     private var timer: Timer?
@@ -36,18 +37,19 @@ class StatusMonitor {
 
     private func poll() async {
         for i in backendPorts.indices {
-            backendPorts[i].appName = await appName(forPort: backendPorts[i].id)
+            let result = await portDetails(forPort: backendPorts[i].id)
+            backendPorts[i].appName = result.appName
+            backendPorts[i].isDemoMode = result.isDemoMode
         }
         for i in frontendPorts.indices {
-            frontendPorts[i].appName = await appName(forPort: frontendPorts[i].id)
+            let result = await portDetails(forPort: frontendPorts[i].id)
+            frontendPorts[i].appName = result.appName
+            frontendPorts[i].isDemoMode = result.isDemoMode
         }
     }
 
-    /// Detects which project is running on a port by:
-    ///   1. lsof  → PID of the listening process
-    ///   2. ps    → full command string for that PID
-    ///   3. parse → first path component after the home directory
-    private func appName(forPort port: Int) async -> String? {
+    /// Detects which project is running on a port and whether it has demo.db open.
+    private func portDetails(forPort port: Int) async -> (appName: String?, isDemoMode: Bool) {
         let home = NSHomeDirectory()
         return await Task.detached {
             // Step 1: lsof to find the PID
@@ -57,22 +59,32 @@ class StatusMonitor {
             let lsofPipe = Pipe()
             lsof.standardOutput = lsofPipe
             lsof.standardError  = Pipe()
-            guard (try? lsof.run()) != nil else { return nil }
+            guard (try? lsof.run()) != nil else { return (nil, false) }
             lsof.waitUntilExit()
 
             let lsofOut = String(data: lsofPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            // Skip the header line; collect all unique PIDs (uvicorn spawns a reloader subprocess,
-            // so lsof may return multiple rows — only one will have the project path).
             let dataLines = lsofOut.components(separatedBy: "\n").dropFirst().filter { !$0.isEmpty }
-            guard !dataLines.isEmpty else { return nil }
+            guard !dataLines.isEmpty else { return (nil, false) }
 
             let pids = dataLines.compactMap { line -> Int? in
                 let fields = line.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
                 return fields.count >= 2 ? Int(fields[1]) : nil
             }.uniqued()
 
-            // Step 2 & 3: for each PID, get the full command and try to parse the app name.
             let prefix = home + "/"
+
+            // Helper: extract project name from an absolute path under ~/
+            func projectName(from path: String) -> String? {
+                guard path.hasPrefix(prefix) else { return nil }
+                let relative = String(path.dropFirst(prefix.count))
+                if let name = relative.components(separatedBy: "/").first, !name.isEmpty {
+                    return name
+                }
+                return nil
+            }
+
+            // Step 2: try to parse the app name from command-line tokens.
+            var appName: String? = nil
             for pid in pids {
                 let ps = Process()
                 ps.executableURL = URL(fileURLWithPath: "/bin/ps")
@@ -85,15 +97,55 @@ class StatusMonitor {
 
                 let command = String(data: psPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 for token in command.components(separatedBy: .whitespaces) {
-                    if token.hasPrefix(prefix) {
-                        let relative = String(token.dropFirst(prefix.count))
-                        if let name = relative.components(separatedBy: "/").first, !name.isEmpty {
-                            return name
+                    if let name = projectName(from: token) { appName = name; break }
+                }
+                if appName != nil { break }
+            }
+
+            // Fallback: check the process's working directory.
+            if appName == nil {
+                for pid in pids {
+                    let cwd = Process()
+                    cwd.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+                    cwd.arguments = ["-a", "-p", "\(pid)", "-d", "cwd", "-Fn"]
+                    let cwdPipe = Pipe()
+                    cwd.standardOutput = cwdPipe
+                    cwd.standardError  = Pipe()
+                    guard (try? cwd.run()) != nil else { continue }
+                    cwd.waitUntilExit()
+
+                    let cwdOut = String(data: cwdPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                    for line in cwdOut.components(separatedBy: "\n") where line.hasPrefix("n") {
+                        if let name = projectName(from: String(line.dropFirst())) {
+                            appName = name; break
                         }
                     }
+                    if appName != nil { break }
                 }
             }
-            return nil
+
+            guard appName != nil else { return (nil, false) }
+
+            // Step 3: check if any PID has demo.db open.
+            var isDemoMode = false
+            for pid in pids {
+                let files = Process()
+                files.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+                files.arguments = ["-a", "-p", "\(pid)", "-Fn"]
+                let filesPipe = Pipe()
+                files.standardOutput = filesPipe
+                files.standardError  = Pipe()
+                guard (try? files.run()) != nil else { continue }
+                files.waitUntilExit()
+
+                let filesOut = String(data: filesPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                if filesOut.contains("/demo.db") {
+                    isDemoMode = true
+                    break
+                }
+            }
+
+            return (appName, isDemoMode)
         }.value
     }
 

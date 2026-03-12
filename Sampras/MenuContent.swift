@@ -116,7 +116,10 @@ struct MenuContent: View {
 
     private func portLabel(_ port: PortInfo) -> String {
         var label = ":\(port.id)"
-        if let name = port.appName { label += "  \(name)" }
+        if let name = port.appName {
+            label += "  \(name)"
+            if port.isDemoMode { label += " (demo)" }
+        }
         return label
     }
 
