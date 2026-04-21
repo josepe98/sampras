@@ -8,12 +8,12 @@ Sampras lives in your menu bar and gives you at-a-glance visibility into whether
 
 ### Features
 
-- **Live port monitoring** — watches backend ports (8000–8002) and frontend ports (5173–5178) and updates the menu bar icon to reflect the current state
+- **Live port monitoring** — watches backend ports (8000–8005) and frontend ports (5173–5178) and updates the menu bar icon to reflect the current state
 - **Process identification** — detects which project is running on each port and displays its name in the menu
 - **One-click start/stop** — start a server by selecting it from a discovered list of local projects; stop it just as easily
 - **Auto app discovery** — scans your home directory for projects with a Python/uvicorn backend or a Node/Vite frontend and surfaces them as launch options
 - **Log access** — open the log file for any running server directly from the menu
-- **Open in browser** — launch the active frontend in your default browser in one click
+- **Open in browser** — a submenu lists all active apps (frontend and backend) so you can open any of them in your default browser
 
 The monitored ports and discovery logic can be tailored to track any apps running on those ports — making Sampras adaptable to your own local development setup.
 
