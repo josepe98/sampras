@@ -24,7 +24,13 @@ struct MenuContent: View {
         Divider()
 
         Menu("Open in Browser") {
-            let activeFrontends = monitor.frontendPorts.filter(\.isRunning)
+            // Prefer frontend port when an app has both; deduplicate by name
+            let allActive = (monitor.frontendPorts + monitor.backendPorts).filter(\.isRunning)
+            var seen = Set<String>()
+            let activeFrontends = allActive.filter { port in
+                let key = port.appName ?? ":\(port.id)"
+                return seen.insert(key).inserted
+            }
             if activeFrontends.isEmpty {
                 Text("No active apps")
             } else {
