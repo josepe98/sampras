@@ -99,7 +99,6 @@
 				};
 			};
 			buildConfigurationList = 85FB2DDE6539E7C8B62DC79E /* Build configuration list for PBXProject "Sampras" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -109,6 +108,7 @@
 			mainGroup = 37DD2515162FE75ECDF03DFB;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 29329B258BBA36F2A91A5298 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

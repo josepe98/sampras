@@ -57,6 +57,7 @@ struct MenuContent: View {
 
     @ViewBuilder
     private func portMenu(_ port: PortInfo, type: PortType) -> some View {
+        let failure = manager.failures[port.id]
         Menu {
             if port.isRunning {
                 Button("Stop") {
@@ -64,6 +65,20 @@ struct MenuContent: View {
                 }
                 Button("Open Log") {
                     NSWorkspace.shared.open(URL(fileURLWithPath: "/tmp/sampras-\(port.id).log"))
+                }
+            } else if failure != nil {
+                Button("Open Log") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/tmp/sampras-\(port.id).log"))
+                }
+                Button("Retry…") {
+                    let capturedPort = port.id
+                    let capturedManager = manager
+                    DispatchQueue.main.async {
+                        MenuContent.showStartPanel(port: capturedPort, type: type, manager: capturedManager)
+                    }
+                }
+                Button("Dismiss") {
+                    manager.clearFailure(port: port.id)
                 }
             } else {
                 Button("Start…") {
@@ -76,11 +91,17 @@ struct MenuContent: View {
             }
         } label: {
             Label {
-                Text(portLabel(port))
+                Text(portLabel(port, failure: failure))
             } icon: {
-                Image(nsImage: dotImage(port.isRunning ? .systemGreen : .systemRed))
+                Image(nsImage: dotImage(dotColor(running: port.isRunning, failed: failure != nil)))
             }
         }
+    }
+
+    private func dotColor(running: Bool, failed: Bool) -> NSColor {
+        if running { return .systemGreen }
+        if failed  { return .systemYellow }
+        return .systemRed
     }
 
     // MARK: - Start panel
@@ -120,11 +141,17 @@ struct MenuContent: View {
 
     // MARK: - Helpers
 
-    private func portLabel(_ port: PortInfo) -> String {
+    private func portLabel(_ port: PortInfo, failure: PortFailure? = nil) -> String {
         var label = ":\(port.id)"
         if let name = port.appName {
             label += "  \(name)"
             if port.isDemoMode { label += " (demo)" }
+        } else if let failure {
+            switch failure.reason {
+            case .uncaughtSignal: label += "  failed (signal \(failure.exitCode))"
+            case .exited:         label += "  failed (exit \(failure.exitCode))"
+            case .launchThrew:    label += "  failed to launch"
+            }
         }
         return label
     }
