@@ -77,7 +77,8 @@ class StatusMonitor {
             func projectName(from path: String) -> String? {
                 guard path.hasPrefix(prefix) else { return nil }
                 let relative = String(path.dropFirst(prefix.count))
-                if let name = relative.components(separatedBy: "/").first, !name.isEmpty {
+                if let name = relative.components(separatedBy: "/").first,
+                   !name.isEmpty, !name.hasPrefix(".") {
                     return name
                 }
                 return nil
