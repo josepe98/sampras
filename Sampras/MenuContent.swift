@@ -107,7 +107,9 @@ struct MenuContent: View {
     // MARK: - Start panel
 
     static func showStartPanel(port: Int, type: PortType, manager: ProcessManager) {
-        let apps = discoverApps().filter { type == .backend ? $0.hasBackend : $0.hasFrontend }
+        let allApps = (discoverApps() + discoverSpecialApps())
+            .sorted { $0.name < $1.name }
+        let apps = allApps.filter { type == .backend ? $0.hasBackend : $0.hasFrontend }
 
         NSApplication.shared.activate(ignoringOtherApps: true)
 

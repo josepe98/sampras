@@ -1,12 +1,13 @@
 import Foundation
 
 struct AppDefinition: Identifiable {
-    let name: String          // directory name, e.g. "everything-app"
-    let path: String          // absolute path, e.g. "/Users/x/everything-app"
-    let uvicornPath: String?  // absolute path to uvicorn binary, nil if no backend
-    let uvicornModule: String // e.g. "app.main:app" or "main:app"
-    let hasFrontend: Bool     // has frontend/package.json
-    var hasBackend: Bool { uvicornPath != nil }
+    let name: String              // directory name, e.g. "everything-app"
+    let path: String              // absolute path, e.g. "/Users/x/everything-app"
+    let uvicornPath: String?      // absolute path to uvicorn binary, nil if no uvicorn backend
+    let uvicornModule: String     // e.g. "app.main:app" or "main:app"
+    let hasFrontend: Bool         // has frontend/package.json
+    let customBackendCmd: String? // shell command run in place of uvicorn; PORT=\(port) prepended at launch
+    var hasBackend: Bool { uvicornPath != nil || customBackendCmd != nil }
     var id: String { name }
 }
 
@@ -44,6 +45,32 @@ func discoverApps() -> [AppDefinition] {
 
         return AppDefinition(name: url.lastPathComponent, path: p,
                              uvicornPath: uvicorn, uvicornModule: uvicornModule,
-                             hasFrontend: hasFrontend)
+                             hasFrontend: hasFrontend, customBackendCmd: nil)
     }.sorted { $0.name < $1.name }
+}
+
+/// Returns any well-known apps that don't follow the standard uvicorn/npm pattern.
+/// These are merged into the result of `discoverApps()` for menu purposes.
+func discoverSpecialApps() -> [AppDefinition] {
+    let fm = FileManager.default
+    let home = NSHomeDirectory()
+    var apps: [AppDefinition] = []
+
+    // ── claude-usage ──────────────────────────────────────────────────────────
+    // Runs dashboard.py directly with Python (no uvicorn). Respects PORT env var.
+    let claudeUsagePath = "\(home)/claude-usage"
+    if fm.fileExists(atPath: "\(claudeUsagePath)/dashboard.py") {
+        let python = "\(home)/.venv/bin/python"
+        let pythonExe = fm.fileExists(atPath: python) ? python : "/usr/bin/python3"
+        apps.append(AppDefinition(
+            name: "claude-usage",
+            path: claudeUsagePath,
+            uvicornPath: nil,
+            uvicornModule: "",
+            hasFrontend: false,
+            customBackendCmd: "'\(pythonExe)' dashboard.py"
+        ))
+    }
+
+    return apps
 }

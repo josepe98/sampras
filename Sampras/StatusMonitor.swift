@@ -17,7 +17,7 @@ struct PortInfo: Identifiable {
 @Observable
 @MainActor
 class StatusMonitor {
-    var backendPorts:  [PortInfo] = [8000, 8001, 8002, 8003, 8004, 8005].map { PortInfo(id: $0) }
+    var backendPorts:  [PortInfo] = [8000, 8001, 8002, 8003, 8004, 8005, 8080].map { PortInfo(id: $0) }
     var frontendPorts: [PortInfo] = [5173, 5174, 5175, 5176, 5177, 5178].map { PortInfo(id: $0) }
 
     private var timer: Timer?

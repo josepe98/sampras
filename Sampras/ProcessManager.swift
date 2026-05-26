@@ -44,14 +44,22 @@ class ProcessManager {
     // MARK: - Start Backend
 
     func startBackend(port: Int, app: AppDefinition) {
-        guard let uvicorn = app.uvicornPath else { return }
         stop(port: port)
-        let cmd = """
-            cd '\(app.path)/backend' && \
-            '\(uvicorn)' \(app.uvicornModule) \
-            --host 0.0.0.0 --port \(port) --reload \
-            > '/tmp/sampras-\(port).log' 2>&1
-            """
+
+        let cmd: String
+        if let customCmd = app.customBackendCmd {
+            // Script-based backend (e.g. claude-usage dashboard.py). PORT env var
+            // is injected so the script can bind to the user-chosen port.
+            cmd = "cd '\(app.path)' && PORT=\(port) \(customCmd) > '/tmp/sampras-\(port).log' 2>&1"
+        } else {
+            guard let uvicorn = app.uvicornPath else { return }
+            cmd = """
+                cd '\(app.path)/backend' && \
+                '\(uvicorn)' \(app.uvicornModule) \
+                --host 0.0.0.0 --port \(port) --reload \
+                > '/tmp/sampras-\(port).log' 2>&1
+                """
+        }
         launch(cmd: cmd, port: port)
     }
 
