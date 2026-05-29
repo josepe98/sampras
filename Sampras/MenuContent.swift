@@ -50,6 +50,15 @@ struct MenuContent: View {
 
         Divider()
 
+        Button("Restart Sampras") {
+            let appPath = Bundle.main.bundlePath
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/sh")
+            task.arguments = ["-c", "sleep 0.5 && open '\(appPath)'"]
+            try? task.run()
+            NSApplication.shared.terminate(nil)
+        }
+
         Button("Quit") { NSApplication.shared.terminate(nil) }
     }
 
@@ -60,6 +69,11 @@ struct MenuContent: View {
         let failure = manager.failures[port.id]
         Menu {
             if port.isRunning {
+                if manager.canRestart(port: port.id, appName: port.appName) {
+                    Button("Restart") {
+                        manager.restart(port: port.id, appName: port.appName, type: type)
+                    }
+                }
                 Button("Stop") {
                     manager.stop(port: port.id)
                 }

@@ -15,6 +15,9 @@ class ProcessManager {
     /// Processes Sampras has started, keyed by port number.
     private var processes: [Int: Process] = [:]
 
+    /// App definitions for ports Sampras started, used to support Restart.
+    private var runningApps: [Int: (app: AppDefinition, type: PortType)] = [:]
+
     /// Per-port record of the most recent unexpected termination. Cleared on
     /// stop/restart and on user dismissal.
     var failures: [Int: PortFailure] = [:]
@@ -26,6 +29,7 @@ class ProcessManager {
         // sees `processes[port] !== proc` and treats this as a user-initiated
         // stop (silent — no failure recorded).
         let proc = processes.removeValue(forKey: port)
+        runningApps.removeValue(forKey: port)
         proc?.terminate()
         failures.removeValue(forKey: port)
 
@@ -43,8 +47,37 @@ class ProcessManager {
 
     // MARK: - Start Backend
 
+    func canRestart(port: Int, appName: String?) -> Bool {
+        runningApps[port] != nil || resolvedApp(for: port, appName: appName) != nil
+    }
+
+    func restart(port: Int, appName: String?, type: PortType) {
+        let entry: (app: AppDefinition, type: PortType)
+        if let stored = runningApps[port] {
+            entry = stored
+        } else if let app = resolvedApp(for: port, appName: appName) {
+            entry = (app, type)
+        } else {
+            return
+        }
+        if entry.type == .backend {
+            startBackend(port: port, app: entry.app)
+        } else {
+            startFrontend(port: port, app: entry.app)
+        }
+    }
+
+    private func resolvedApp(for port: Int, appName: String?) -> AppDefinition? {
+        guard let name = appName else { return nil }
+        let all = discoverApps() + discoverSpecialApps()
+        return all.first { $0.name == name }
+    }
+
+    // MARK: - Start Backend
+
     func startBackend(port: Int, app: AppDefinition) {
         stop(port: port)
+        runningApps[port] = (app, .backend)
 
         let cmd: String
         if let customCmd = app.customBackendCmd {
@@ -67,6 +100,7 @@ class ProcessManager {
 
     func startFrontend(port: Int, app: AppDefinition) {
         stop(port: port)
+        runningApps[port] = (app, .frontend)
         let cmd = """
             cd '\(app.path)/frontend' && \
             npm run dev -- --port \(port) \
@@ -105,6 +139,7 @@ class ProcessManager {
         // stopped or restarted it. Stay silent.
         guard processes[port] === proc else { return }
         processes.removeValue(forKey: port)
+        runningApps.removeValue(forKey: port)
 
         let reason: PortFailure.Reason = proc.terminationReason == .uncaughtSignal ? .uncaughtSignal : .exited
         failures[port] = PortFailure(

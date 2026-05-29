@@ -30,8 +30,8 @@ targets:
         CFBundleName: Sampras
         CFBundleDisplayName: Sampras
         CFBundleIdentifier: com.erikjosephson.Sampras
-        CFBundleVersion: "13"
-        CFBundleShortVersionString: "1.12"
+        CFBundleVersion: "14"
+        CFBundleShortVersionString: "1.13"
         LSMinimumSystemVersion: "14.0"
         LSUIElement: YES
         NSPrincipalClass: NSApplication
