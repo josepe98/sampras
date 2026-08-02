@@ -21,9 +21,10 @@ The monitored ports and discovery logic can be tailored to track any apps runnin
 
 ## Requirements
 
-- macOS 14 (Sonnet) or later
-- Backend apps: Python project with a `venv` containing `uvicorn`
-- Frontend apps: Node project with a `frontend/package.json` and `npm run dev` support
+- **Building**: Xcode 16.0+, Swift 6.0
+- **Runtime**: macOS 14 (Sonnet) or later
+- **Backend apps**: Python project with a `venv` containing `uvicorn`
+- **Frontend apps**: Node project with a `frontend/package.json` and `npm run dev` support
 
 ## Building
 
