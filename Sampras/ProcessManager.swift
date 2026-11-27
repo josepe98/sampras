@@ -33,10 +33,12 @@ class ProcessManager {
         proc?.terminate()
         failures.removeValue(forKey: port)
 
-        // Also kill anything externally holding the port (e.g. started outside Sampras).
+        // Also kill anything externally LISTENING on the port (e.g. started outside
+        // Sampras). Must be restricted to listeners: a bare `lsof -ti :port` also
+        // returns clients connected to the port — i.e. the browser with the app open.
         let killer = Process()
         killer.executableURL = URL(fileURLWithPath: "/bin/bash")
-        killer.arguments = ["-c", "lsof -ti :\(port) | xargs kill -9 2>/dev/null; true"]
+        killer.arguments = ["-c", "/usr/sbin/lsof -ti tcp:\(port) -sTCP:LISTEN | xargs kill -9 2>/dev/null; true"]
         try? killer.run()
         killer.waitUntilExit()
     }
@@ -52,6 +54,13 @@ class ProcessManager {
     }
 
     func restart(port: Int, appName: String?, type: PortType) {
+        // A launchd job with KeepAlive respawns its process the instant it is
+        // killed, so kill-then-spawn loses the race for the port. Ask launchd
+        // to do the restart instead.
+        if let label = launchdLabel(forListenerOn: port) {
+            restartViaLaunchd(label: label, port: port)
+            return
+        }
         let entry: (app: AppDefinition, type: PortType)
         if let stored = runningApps[port] {
             entry = stored
@@ -65,6 +74,57 @@ class ProcessManager {
         } else {
             startFrontend(port: port, app: entry.app)
         }
+    }
+
+    /// Label of the user launchd job that owns the process listening on `port`,
+    /// if any. Walks up the parent chain because the listener may be a child of
+    /// the job's main process (e.g. uvicorn --reload workers). `application.*`
+    /// labels are ordinary GUI apps (including Sampras itself), not jobs.
+    private func launchdLabel(forListenerOn port: Int) -> String? {
+        let script = """
+            pid=$(/usr/sbin/lsof -ti tcp:\(port) -sTCP:LISTEN | head -1)
+            jobs=$(/bin/launchctl list)
+            while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
+              label=$(echo "$jobs" | awk -v p="$pid" '$1==p && $3 !~ /^application\\./ {print $3; exit}')
+              if [ -n "$label" ]; then echo "$label"; exit 0; fi
+              pid=$(ps -o ppid= -p "$pid" | tr -d ' ')
+            done
+            """
+        let (status, out) = runShell(script)
+        let label = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        return status == 0 && !label.isEmpty ? label : nil
+    }
+
+    private func restartViaLaunchd(label: String, port: Int) {
+        // Drop any Sampras-owned process for this port without tripping the
+        // unexpected-termination alert.
+        processes.removeValue(forKey: port)?.terminate()
+        runningApps.removeValue(forKey: port)
+        failures.removeValue(forKey: port)
+
+        let (status, out) = runShell("/bin/launchctl kickstart -k gui/\(getuid())/'\(label)' 2>&1")
+        if status != 0 {
+            failures[port] = PortFailure(
+                timestamp: Date(),
+                reason: .launchThrew,
+                exitCode: status,
+                logTail: "launchctl kickstart of \(label) failed (exit \(status)):\n\(out)"
+            )
+            surfaceFailureAlert(port: port)
+        }
+    }
+
+    private func runShell(_ script: String) -> (status: Int32, output: String) {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = ["-c", script]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = FileHandle.nullDevice
+        guard (try? proc.run()) != nil else { return (-1, "") }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        return (proc.terminationStatus, String(data: data, encoding: .utf8) ?? "")
     }
 
     private func resolvedApp(for port: Int, appName: String?) -> AppDefinition? {
@@ -101,15 +161,52 @@ class ProcessManager {
     func startFrontend(port: Int, app: AppDefinition) {
         stop(port: port)
         runningApps[port] = (app, .frontend)
+        // A GUI app's PATH is /usr/bin:/bin:/usr/sbin:/sbin — it has no nvm or
+        // Homebrew entries, so npm (and the node it shells out to) must be put
+        // on PATH explicitly.
+        let pathPrefix = Self.nodeBinDir.map { "PATH='\($0)':\"$PATH\" " } ?? ""
         let cmd = """
             cd '\(app.path)/frontend' && \
-            npm run dev -- --port \(port) \
+            \(pathPrefix)npm run dev -- --port \(port) \
             > '/tmp/sampras-\(port).log' 2>&1
             """
         launch(cmd: cmd, port: port)
     }
 
     // MARK: - Helpers
+
+    /// Directory containing `npm` and `node`, resolved once per launch. Asks the
+    /// user's interactive login shell first (so it honours nvm's default), then
+    /// falls back to well-known install locations.
+    private static let nodeBinDir: String? = {
+        let fm = FileManager.default
+
+        let shell = Process()
+        shell.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        shell.arguments = ["-ilc", "command -v npm"]
+        shell.standardInput = FileHandle.nullDevice
+        shell.standardError = FileHandle.nullDevice
+        let pipe = Pipe()
+        shell.standardOutput = pipe
+        if (try? shell.run()) != nil {
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            shell.waitUntilExit()
+            let lines = (String(data: data, encoding: .utf8) ?? "")
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            if let npm = lines.last(where: { $0.hasPrefix("/") && fm.isExecutableFile(atPath: $0) }) {
+                return (npm as NSString).deletingLastPathComponent
+            }
+        }
+
+        var candidates = ["/opt/homebrew/bin", "/usr/local/bin"]
+        let nvmRoot = NSHomeDirectory() + "/.nvm/versions/node"
+        if let versions = try? fm.contentsOfDirectory(atPath: nvmRoot) {
+            let newestFirst = versions.sorted { $0.compare($1, options: .numeric) == .orderedDescending }
+            candidates += newestFirst.map { "\(nvmRoot)/\($0)/bin" }
+        }
+        return candidates.first { fm.isExecutableFile(atPath: $0 + "/npm") }
+    }()
 
     private func launch(cmd: String, port: Int) {
         let process = Process()
